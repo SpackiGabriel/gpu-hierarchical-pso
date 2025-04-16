@@ -5,7 +5,7 @@ This project implements a hierarchical Particle Swarm Optimization (PSO) algorit
 ## Project Structure
 
 ```bash
-pso_project/ 
+gpu-hierarchical-pso/ 
 ├── kernel.py # Contains the CUDA kernel code and compiles the kernel using CuPy. 
 ├── pso_gpu.py # Implements the GPU_PSO class that encapsulates the GPU-based PSO algorithm. 
 ├── hierarchical_pso.py # Orchestrates the hierarchical PSO execution over divided parameter spaces. 
