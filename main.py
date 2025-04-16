@@ -13,7 +13,7 @@ if __name__ == "__main__":
     result = hierarchical_pso(
         p, q,
         part_n=100000,
-        iter_n=400,
+        iter_n=1000,
         param_bounds=[[0, 10000000], [0, 10000000]],
         divisions=5,
         w=0.8,
