@@ -1,4 +1,6 @@
 import cupy as cp
+from typing import Optional
+from registries import objective_registry, error_registry
 
 
 class GPU_PSO:
@@ -21,6 +23,11 @@ class GPU_PSO:
         personal_best_fitness (cupy.ndarray): Best fitness values per particle.
         global_best (cupy.ndarray): Best global position among all particles.
         global_best_fitness (float): Best global fitness value.
+        objective (str): Name of the objective function.
+        error (str): Name of the error metric.
+        model_id (int): Device-side identifier for the objective function.
+        error_id (int): Device-side identifier for the error metric.
+        sst (float): Total sum of squares for R2 calculation.
     """
 
     def __init__(
@@ -31,6 +38,8 @@ class GPU_PSO:
         dim: int,
         param_bounds,
         kernel,
+        objective: str = "langmuir",
+        error: str = "sse",
         threads_per_block: int = 256,
         initial_positions=None,
     ) -> None:
@@ -44,17 +53,37 @@ class GPU_PSO:
             dim (int): Dimensionality of each particle.
             param_bounds: List of tuples (lower, upper) for each dimension.
             kernel: Compiled CUDA kernel for updating positions and velocities.
+            objective (str): Name of the objective function.
+            error (str): Name of the error metric.
             threads_per_block (int, optional): Number of threads per block. Defaults to 256.
             initial_positions (optional): Predefined initial positions for particles.
         """
         self.p = cp.asarray(p, dtype=cp.float64)
         self.q = cp.asarray(q, dtype=cp.float64)
         self.n_particles: int = n_particles
+        
+        # Validate and set objective function
+        self.objective = objective
+        self.model_id = objective_registry.get_model_id(objective)
+        required_dim = objective_registry.get_dimension(objective)
+        if dim != required_dim:
+            raise ValueError(f"Objective '{objective}' requires dimension {required_dim}, but got {dim}")
         self.dim: int = dim
+        
+        # Validate and set error metric
+        self.error = error
+        self.error_id = error_registry.get_error_id(error)
+        
         self.param_bounds = param_bounds
         self.kernel = kernel
         self.threads_per_block: int = threads_per_block
         self.blocks_per_grid: int = (n_particles * dim + threads_per_block - 1) // threads_per_block
+        
+        # Calculate SST for R2 calculation if needed
+        self.sst = 0.0
+        if self.error == "r2":
+            q_mean = cp.mean(self.q)
+            self.sst = cp.sum((self.q - q_mean) ** 2)
 
         self.initialize_particles(initial_positions)
 
@@ -77,10 +106,22 @@ class GPU_PSO:
             self.position = cp.asarray(initial_positions, dtype=cp.float64)
         self.velocity = cp.zeros_like(self.position)
         self.personal_best = self.position.copy()
-        self.fitness = cp.full(self.n_particles, cp.inf, dtype=cp.float64)
-        self.personal_best_fitness = cp.full(self.n_particles, cp.inf, dtype=cp.float64)
+        
+        # Initialize fitness values based on error metric
+        if self.error == "r2":
+            # R2 values are typically between -∞ and 1, with 1 being perfect
+            self.fitness = cp.full(self.n_particles, -cp.inf, dtype=cp.float64)
+            self.personal_best_fitness = cp.full(self.n_particles, -cp.inf, dtype=cp.float64)
+        else:
+            # Other error metrics are minimized (0 is perfect)
+            self.fitness = cp.full(self.n_particles, cp.inf, dtype=cp.float64)
+            self.personal_best_fitness = cp.full(self.n_particles, cp.inf, dtype=cp.float64)
+        
         self.global_best = cp.zeros(self.dim, dtype=cp.float64)
-        self.global_best_fitness = cp.inf
+        if self.error == "r2":
+            self.global_best_fitness = -cp.inf
+        else:
+            self.global_best_fitness = cp.inf
 
     def run_iteration(self, w: float, c1: float, c2: float) -> None:
         """
@@ -114,12 +155,25 @@ class GPU_PSO:
                 len(self.p),
                 self.p,
                 self.q,
+                self.model_id,
+                self.error_id,
+                self.sst,
             )
         )
-        best_idx = cp.argmin(self.personal_best_fitness)
-        if self.personal_best_fitness[best_idx] < self.global_best_fitness:
-            self.global_best_fitness = self.personal_best_fitness[best_idx]
-            self.global_best = self.personal_best[best_idx]
+        
+        # Update global best based on error metric
+        if self.error == "r2":
+            # For R2, higher values are better
+            best_idx = cp.argmax(self.personal_best_fitness)
+            if self.personal_best_fitness[best_idx] > self.global_best_fitness:
+                self.global_best_fitness = self.personal_best_fitness[best_idx]
+                self.global_best = self.personal_best[best_idx]
+        else:
+            # For other metrics, lower values are better
+            best_idx = cp.argmin(self.personal_best_fitness)
+            if self.personal_best_fitness[best_idx] < self.global_best_fitness:
+                self.global_best_fitness = self.personal_best_fitness[best_idx]
+                self.global_best = self.personal_best[best_idx]
 
     def optimize(self, n_iterations: int, w: float, c1: float, c2: float):
         """

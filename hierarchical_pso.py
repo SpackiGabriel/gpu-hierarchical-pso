@@ -2,6 +2,7 @@ from itertools import product
 from gpu_pso import GPU_PSO
 from utils import divide_intervals
 from kernel import pso_kernel
+from registries import objective_registry, error_registry
 
 
 def hierarchical_pso(
@@ -14,6 +15,8 @@ def hierarchical_pso(
     w: float = 0.8,
     c1: float = 1.8,
     c2: float = 1.8,
+    objective: str = "langmuir",
+    error: str = "sse",
 ):
     """
     Execute the hierarchical PSO algorithm.
@@ -33,24 +36,42 @@ def hierarchical_pso(
         w (float, optional): Inertia weight. Defaults to 0.8.
         c1 (float, optional): Cognitive acceleration coefficient. Defaults to 1.8.
         c2 (float, optional): Social acceleration coefficient. Defaults to 1.8.
+        objective (str): Name of the objective function. Defaults to "langmuir".
+        error (str): Name of the error metric. Defaults to "sse".
 
     Returns:
         tuple: Best global position (as a NumPy array) and the corresponding fitness value.
     """
+    # Validate objective and error
+    if objective not in objective_registry.list_objectives():
+        raise ValueError(f"Objective '{objective}' not registered")
+    
+    if error not in error_registry.list_errors():
+        raise ValueError(f"Error metric '{error}' not registered")
+    
+    # Get required dimension for the objective
+    required_dim = objective_registry.get_dimension(objective)
+    
     if param_bounds is None:
-        param_bounds = [[0, 1000000], [0, 1000000]]
+        # Set default bounds based on the required dimension
+        param_bounds = [[0, 1000000] for _ in range(required_dim)]
+    
+    # Validate dimension
+    if len(param_bounds) != required_dim:
+        raise ValueError(f"Objective '{objective}' requires {required_dim} parameters, but got {len(param_bounds)} bounds")
+    
     divided_intervals = divide_intervals(param_bounds, divisions)
     subinterval_combinations = list(product(*divided_intervals))
 
     best_particles = []
 
     for subinterval in subinterval_combinations:
-        pso_instance = GPU_PSO(p, q, part_n, len(param_bounds), subinterval, pso_kernel)
+        pso_instance = GPU_PSO(p, q, part_n, len(param_bounds), subinterval, pso_kernel, objective, error)
         best_pos, best_fit = pso_instance.optimize(iter_n, w, c1, c2)
         best_particles.append((best_pos, best_fit))
 
     global_positions = [pos for pos, _ in best_particles]
-    global_pso = GPU_PSO(p, q, len(global_positions), len(param_bounds), param_bounds, pso_kernel, initial_positions=global_positions)
+    global_pso = GPU_PSO(p, q, len(global_positions), len(param_bounds), param_bounds, pso_kernel, objective, error, initial_positions=global_positions)
     global_best, global_best_fitness = global_pso.optimize(iter_n, w, c1, c2)
 
     print(f"Final global best particle: {global_best}, Fitness: {global_best_fitness}")
