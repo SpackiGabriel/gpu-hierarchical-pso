@@ -43,7 +43,7 @@ void update_velocity_position(
     double *q,
     int model_id,
     int error_id,
-    double sst  // Total sum of squares for R2 calculation
+    double sst
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n_particles * dim) {
@@ -51,288 +51,288 @@ void update_velocity_position(
         int dim_idx = idx % dim;
         int pos = particle_idx * dim + dim_idx;
         
-        // Update velocity and position
+
         velocity[pos] = w * velocity[pos] + c1 * r1[pos] * (personal_best[pos] - position[pos]) + c2 * r2[pos] * (global_best[dim_idx] - position[pos]);
         position[pos] += velocity[pos];
         
-        // Compute fitness only once per particle (when dim_idx == 0)
+
         if (dim_idx == 0) {
             double fit = 0.0;
             double q_calc;
             
-            // Compute q_calc based on selected model
+
             switch (model_id) {
-                case 0: { // Langmuir
+                case 0: {
                     if (dim < 2) {
-                        fit = 1e10; // Penalty for incorrect dimension
+                        fit = 1e10;
                         break;
                     }
                     double qmax = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
                     
-                    // Check parameter validity
+
                     if (qmax <= 0 || b <= 0) {
-                        fit = 1e10; // Penalty for invalid parameters
+                        fit = 1e10;
                         break;
                     }
                     
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
-                        if (bp > 700) { // Prevent overflow
+                        if (bp > 700) {
                             q_calc = qmax;
                         } else {
                             q_calc = (qmax * bp) / (1.0 + bp);
                         }
                         
-                        // Compute error based on selected error metric
+
                         switch (error_id) {
-                            case 0: // SSE
+                            case 0:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 1: // MSE
+                            case 1:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 2: // RMSE
+                            case 2:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 3: // MAE
+                            case 3:
                                 fit += fabs(q[i] - q_calc);
                                 break;
-                            case 4: // MAPE
+                            case 4:
                                 if (fabs(q[i]) > 1e-10) {
                                     fit += fabs((q[i] - q_calc) / q[i]);
                                 } else {
                                     fit += fabs(q[i] - q_calc) / 1e-10;
                                 }
                                 break;
-                            case 5: // R2
+                            case 5:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
                         }
                     }
                     break;
                 }
-                case 1: { // Sips
+                case 1: {
                     if (dim < 3) {
-                        fit = 1e10; // Penalty for incorrect dimension
+                        fit = 1e10;
                         break;
                     }
                     double qmax = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
                     double n = position[particle_idx * dim + 2];
                     
-                    // Check parameter validity
+
                     if (qmax <= 0 || b <= 0 || n <= 0) {
-                        fit = 1e10; // Penalty for invalid parameters
+                        fit = 1e10;
                         break;
                     }
                     
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
-                        if (bp > 700 || n > 100) { // Prevent overflow
+                        if (bp > 700 || n > 100) {
                             q_calc = qmax;
                         } else {
                             double bp_n = pow(bp, n);
                             q_calc = (qmax * bp_n) / (1.0 + bp_n);
                         }
                         
-                        // Compute error based on selected error metric
+
                         switch (error_id) {
-                            case 0: // SSE
+                            case 0:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 1: // MSE
+                            case 1:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 2: // RMSE
+                            case 2:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 3: // MAE
+                            case 3:
                                 fit += fabs(q[i] - q_calc);
                                 break;
-                            case 4: // MAPE
+                            case 4:
                                 if (fabs(q[i]) > 1e-10) {
                                     fit += fabs((q[i] - q_calc) / q[i]);
                                 } else {
                                     fit += fabs(q[i] - q_calc) / 1e-10;
                                 }
                                 break;
-                            case 5: // R2
+                            case 5:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
                         }
                     }
                     break;
                 }
-                case 2: { // Toth
+                case 2: {
                     if (dim < 3) {
-                        fit = 1e10; // Penalty for incorrect dimension
+                        fit = 1e10;
                         break;
                     }
                     double qmax = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
                     double t = position[particle_idx * dim + 2];
                     
-                    // Check parameter validity
+
                     if (qmax <= 0 || b <= 0 || t <= 0) {
-                        fit = 1e10; // Penalty for invalid parameters
+                        fit = 1e10;
                         break;
                     }
                     
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
-                        if (bp > 700 || t > 100) { // Prevent overflow
+                        if (bp > 700 || t > 100) {
                             q_calc = qmax;
                         } else {
                             double bp_t = pow(bp, t);
                             double denom = 1.0 + bp_t;
-                            if (denom < 1e-10) denom = 1e-10; // Prevent division by zero
+                            if (denom < 1e-10) denom = 1e-10;
                             double denom_t = pow(denom, 1.0/t);
-                            if (denom_t < 1e-10) denom_t = 1e-10; // Prevent division by zero
+                            if (denom_t < 1e-10) denom_t = 1e-10;
                             q_calc = (qmax * bp) / denom_t;
                         }
                         
-                        // Compute error based on selected error metric
+
                         switch (error_id) {
-                            case 0: // SSE
+                            case 0:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 1: // MSE
+                            case 1:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 2: // RMSE
+                            case 2:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 3: // MAE
+                            case 3:
                                 fit += fabs(q[i] - q_calc);
                                 break;
-                            case 4: // MAPE
+                            case 4:
                                 if (fabs(q[i]) > 1e-10) {
                                     fit += fabs((q[i] - q_calc) / q[i]);
                                 } else {
                                     fit += fabs(q[i] - q_calc) / 1e-10;
                                 }
                                 break;
-                            case 5: // R2
+                            case 5:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
                         }
                     }
                     break;
                 }
-                case 3: { // BET
+                case 3: {
                     if (dim < 3) {
-                        fit = 1e10; // Penalty for incorrect dimension
+                        fit = 1e10;
                         break;
                     }
                     double qm = position[particle_idx * dim];
                     double c = position[particle_idx * dim + 1];
                     double k = position[particle_idx * dim + 2];
                     
-                    // Check parameter validity
+
                     if (qm <= 0 || c <= 0 || k <= 0) {
-                        fit = 1e10; // Penalty for invalid parameters
+                        fit = 1e10;
                         break;
                     }
                     
                     for (int i = 0; i < n_points; ++i) {
                         double p_val = p[i];
-                        if (p_val >= 1.0/k) { // Prevent division by zero or negative values
+                        if (p_val >= 1.0/k) {
                             q_calc = 0;
                         } else {
                             double denom1 = 1.0 - k * p_val;
-                            if (fabs(denom1) < 1e-10) denom1 = 1e-10; // Prevent division by zero
+                            if (fabs(denom1) < 1e-10) denom1 = 1e-10;
                             double denom2 = 1.0 + (c - 1.0) * k * p_val;
-                            if (fabs(denom2) < 1e-10) denom2 = 1e-10; // Prevent division by zero
+                            if (fabs(denom2) < 1e-10) denom2 = 1e-10;
                             q_calc = (qm * c * k * p_val) / (denom1 * denom2);
                         }
                         
-                        // Compute error based on selected error metric
+
                         switch (error_id) {
-                            case 0: // SSE
+                            case 0:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 1: // MSE
+                            case 1:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 2: // RMSE
+                            case 2:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 3: // MAE
+                            case 3:
                                 fit += fabs(q[i] - q_calc);
                                 break;
-                            case 4: // MAPE
+                            case 4:
                                 if (fabs(q[i]) > 1e-10) {
                                     fit += fabs((q[i] - q_calc) / q[i]);
                                 } else {
                                     fit += fabs(q[i] - q_calc) / 1e-10;
                                 }
                                 break;
-                            case 5: // R2
+                            case 5:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
                         }
                     }
                     break;
                 }
-                case 4: { // GAB
+                case 4: {
                     if (dim < 3) {
-                        fit = 1e10; // Penalty for incorrect dimension
+                        fit = 1e10;
                         break;
                     }
                     double qm = position[particle_idx * dim];
                     double c = position[particle_idx * dim + 1];
                     double k = position[particle_idx * dim + 2];
                     
-                    // Check parameter validity
+
                     if (qm <= 0 || c <= 0 || k <= 0) {
-                        fit = 1e10; // Penalty for invalid parameters
+                        fit = 1e10;
                         break;
                     }
                     
                     for (int i = 0; i < n_points; ++i) {
                         double p_val = p[i];
-                        if (p_val >= 1.0/k) { // Prevent division by zero or negative values
+                        if (p_val >= 1.0/k) {
                             q_calc = 0;
                         } else {
                             double denom1 = 1.0 - k * p_val;
-                            if (fabs(denom1) < 1e-10) denom1 = 1e-10; // Prevent division by zero
+                            if (fabs(denom1) < 1e-10) denom1 = 1e-10;
                             double denom2 = 1.0 + (c - 1.0) * k * p_val;
-                            if (fabs(denom2) < 1e-10) denom2 = 1e-10; // Prevent division by zero
+                            if (fabs(denom2) < 1e-10) denom2 = 1e-10;
                             q_calc = (qm * c * k * p_val) / (denom1 * denom2);
                         }
                         
-                        // Compute error based on selected error metric
+
                         switch (error_id) {
-                            case 0: // SSE
+                            case 0:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 1: // MSE
+                            case 1:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 2: // RMSE
+                            case 2:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 3: // MAE
+                            case 3:
                                 fit += fabs(q[i] - q_calc);
                                 break;
-                            case 4: // MAPE
+                            case 4:
                                 if (fabs(q[i]) > 1e-10) {
                                     fit += fabs((q[i] - q_calc) / q[i]);
                                 } else {
                                     fit += fabs(q[i] - q_calc) / 1e-10;
                                 }
                                 break;
-                            case 5: // R2
+                            case 5:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
                         }
                     }
                     break;
                 }
-                case 5: { // Newton (linear)
+                case 5: {
                     if (dim < 2) {
-                        fit = 1e10; // Penalty for incorrect dimension
+                        fit = 1e10;
                         break;
                     }
                     double a = position[particle_idx * dim];
@@ -341,28 +341,28 @@ void update_velocity_position(
                     for (int i = 0; i < n_points; ++i) {
                         q_calc = a + b * p[i];
                         
-                        // Compute error based on selected error metric
+
                         switch (error_id) {
-                            case 0: // SSE
+                            case 0:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 1: // MSE
+                            case 1:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 2: // RMSE
+                            case 2:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
-                            case 3: // MAE
+                            case 3:
                                 fit += fabs(q[i] - q_calc);
                                 break;
-                            case 4: // MAPE
+                            case 4:
                                 if (fabs(q[i]) > 1e-10) {
                                     fit += fabs((q[i] - q_calc) / q[i]);
                                 } else {
                                     fit += fabs(q[i] - q_calc) / 1e-10;
                                 }
                                 break;
-                            case 5: // R2
+                            case 5:
                                 fit += (q[i] - q_calc) * (q[i] - q_calc);
                                 break;
                         }
@@ -370,24 +370,24 @@ void update_velocity_position(
                     break;
                 }
                 default:
-                    fit = 1e10; // Unknown model
+                    fit = 1e10;
                     break;
             }
             
-            // Apply final transformation based on error metric
+
             switch (error_id) {
-                case 1: // MSE
+                case 1:
                     fit = fit / n_points;
                     break;
-                case 2: // RMSE
+                case 2:
                     fit = fit / n_points;
                     fit = sqrt(fit);
                     break;
-                case 5: // R2
+                case 5:
                     if (sst > 1e-10) {
                         fit = 1.0 - (fit / sst);
                     } else {
-                        fit = -1e10; // Invalid R2
+                        fit = -1e10;
                     }
                     break;
             }
@@ -434,11 +434,11 @@ void update_velocity_position(
         int dim_idx = idx % dim;
         int pos = particle_idx * dim + dim_idx;
         
-        // Update velocity and position
+
         velocity[pos] = w * velocity[pos] + c1 * r1[pos] * (personal_best[pos] - position[pos]) + c2 * r2[pos] * (global_best[dim_idx] - position[pos]);
         position[pos] += velocity[pos];
         
-        // Compute fitness only once per particle (when dim_idx == 0)
+
         if (dim_idx == 0) {
             double fit = 0.0;
             double q_calc;
@@ -471,18 +471,18 @@ def get_model_function(model_name: str) -> str:
     model_functions = {
         "langmuir": """
             if (dim < 2) {
-                fit = 1e10; // Penalty for incorrect dimension
+                fit = 1e10;
             } else {
                 double qmax = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
                 
-                // Check parameter validity
+
                 if (qmax <= 0 || b <= 0) {
-                    fit = 1e10; // Penalty for invalid parameters
+                    fit = 1e10;
                 } else {
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
-                        if (bp > 700) { // Prevent overflow
+                        if (bp > 700) {
                             q_calc = qmax;
                         } else {
                             q_calc = (qmax * bp) / (1.0 + bp);
@@ -494,19 +494,19 @@ def get_model_function(model_name: str) -> str:
         """,
         "sips": """
             if (dim < 3) {
-                fit = 1e10; // Penalty for incorrect dimension
+                fit = 1e10;
             } else {
                 double qmax = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
                 double n = position[particle_idx * dim + 2];
                 
-                // Check parameter validity
+
                 if (qmax <= 0 || b <= 0 || n <= 0) {
-                    fit = 1e10; // Penalty for invalid parameters
+                    fit = 1e10;
                 } else {
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
-                        if (bp > 700 || n > 100) { // Prevent overflow
+                        if (bp > 700 || n > 100) {
                             q_calc = qmax;
                         } else {
                             double bp_n = pow(bp, n);
@@ -519,26 +519,26 @@ def get_model_function(model_name: str) -> str:
         """,
         "toth": """
             if (dim < 3) {
-                fit = 1e10; // Penalty for incorrect dimension
+                fit = 1e10;
             } else {
                 double qmax = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
                 double t = position[particle_idx * dim + 2];
                 
-                // Check parameter validity
+
                 if (qmax <= 0 || b <= 0 || t <= 0) {
-                    fit = 1e10; // Penalty for invalid parameters
+                    fit = 1e10;
                 } else {
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
-                        if (bp > 700 || t > 100) { // Prevent overflow
+                        if (bp > 700 || t > 100) {
                             q_calc = qmax;
                         } else {
                             double bp_t = pow(bp, t);
                             double denom = 1.0 + bp_t;
-                            if (denom < 1e-10) denom = 1e-10; // Prevent division by zero
+                            if (denom < 1e-10) denom = 1e-10;
                             double denom_t = pow(denom, 1.0/t);
-                            if (denom_t < 1e-10) denom_t = 1e-10; // Prevent division by zero
+                            if (denom_t < 1e-10) denom_t = 1e-10;
                             q_calc = (qmax * bp) / denom_t;
                         }
                         // ERROR_ACCUMULATION_PLACEHOLDER
@@ -548,25 +548,25 @@ def get_model_function(model_name: str) -> str:
         """,
         "bet": """
             if (dim < 3) {
-                fit = 1e10; // Penalty for incorrect dimension
+                fit = 1e10;
             } else {
                 double qm = position[particle_idx * dim];
                 double c = position[particle_idx * dim + 1];
                 double k = position[particle_idx * dim + 2];
                 
-                // Check parameter validity
+
                 if (qm <= 0 || c <= 0 || k <= 0) {
-                    fit = 1e10; // Penalty for invalid parameters
+                    fit = 1e10;
                 } else {
                     for (int i = 0; i < n_points; ++i) {
                         double p_val = p[i];
-                        if (p_val >= 1.0/k) { // Prevent division by zero or negative values
+                        if (p_val >= 1.0/k) {
                             q_calc = 0;
                         } else {
                             double denom1 = 1.0 - k * p_val;
-                            if (fabs(denom1) < 1e-10) denom1 = 1e-10; // Prevent division by zero
+                            if (fabs(denom1) < 1e-10) denom1 = 1e-10;
                             double denom2 = 1.0 + (c - 1.0) * k * p_val;
-                            if (fabs(denom2) < 1e-10) denom2 = 1e-10; // Prevent division by zero
+                            if (fabs(denom2) < 1e-10) denom2 = 1e-10;
                             q_calc = (qm * c * k * p_val) / (denom1 * denom2);
                         }
                         // ERROR_ACCUMULATION_PLACEHOLDER
@@ -576,25 +576,25 @@ def get_model_function(model_name: str) -> str:
         """,
         "gab": """
             if (dim < 3) {
-                fit = 1e10; // Penalty for incorrect dimension
+                fit = 1e10;
             } else {
                 double qm = position[particle_idx * dim];
                 double c = position[particle_idx * dim + 1];
                 double k = position[particle_idx * dim + 2];
                 
-                // Check parameter validity
+
                 if (qm <= 0 || c <= 0 || k <= 0) {
-                    fit = 1e10; // Penalty for invalid parameters
+                    fit = 1e10;
                 } else {
                     for (int i = 0; i < n_points; ++i) {
                         double p_val = p[i];
-                        if (p_val >= 1.0/k) { // Prevent division by zero or negative values
+                        if (p_val >= 1.0/k) {
                             q_calc = 0;
                         } else {
                             double denom1 = 1.0 - k * p_val;
-                            if (fabs(denom1) < 1e-10) denom1 = 1e-10; // Prevent division by zero
+                            if (fabs(denom1) < 1e-10) denom1 = 1e-10;
                             double denom2 = 1.0 + (c - 1.0) * k * p_val;
-                            if (fabs(denom2) < 1e-10) denom2 = 1e-10; // Prevent division by zero
+                            if (fabs(denom2) < 1e-10) denom2 = 1e-10;
                             q_calc = (qm * c * k * p_val) / (denom1 * denom2);
                         }
                         // ERROR_ACCUMULATION_PLACEHOLDER
@@ -604,7 +604,7 @@ def get_model_function(model_name: str) -> str:
         """,
         "newton": """
             if (dim < 2) {
-                fit = 1e10; // Penalty for incorrect dimension
+                fit = 1e10;
             } else {
                 double a = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
@@ -618,7 +618,7 @@ def get_model_function(model_name: str) -> str:
     }
     
     return model_functions.get(model_name, """
-        fit = 1e10; // Unknown model
+        fit = 1e10;
     """)
 
 def get_error_function(error_name: str) -> str:
@@ -680,7 +680,7 @@ def get_error_finalization(error_name: str) -> str:
             if (sst > 1e-10) {
                 fit = 1.0 - (fit / sst);
             } else {
-                fit = -1e10; // Invalid R2
+                fit = -1e10;
             }
         """
     }
