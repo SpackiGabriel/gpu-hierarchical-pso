@@ -13,8 +13,14 @@ gpu-hierarchical-pso/
 ├── hierarchical_pso.py # Orchestrates the hierarchical PSO execution over divided parameter spaces
 ├── utils.py           # Provides helper functions, such as dividing intervals into subintervals
 ├── registries.py      # Defines registries for objective functions and error metrics
+├── setup_env.sh       # Script to set up the virtual environment and install dependencies
 ├── main.py            # Main entry point to run the hierarchical PSO optimizer
-└── test_objectives.py # Test suite for validating the implementation
+├── run_tests.py       # Script to run all test suites
+└── tests/             # Directory containing test suites for validating the implementation
+    ├── test_logic.py      # Tests registry and basic logic without GPU dependencies
+    ├── test_validation.py # Tests parameter bounds and objective/error name validation
+    ├── test_autobounds.py # Demonstrates automatic parameter bounds setting
+    └── test_objectives.py # Comprehensive test suite for the full implementation
 ```
 
 ## Prerequisites
@@ -147,14 +153,36 @@ Serves as the main entry point for the application. It demonstrates:
 - Proper parameter configuration for each model
 - Execution time and result reporting
 
-### test_objectives.py
+### run_tests.py
 
-Provides a comprehensive test suite that validates:
-- Registry functionality
-- Dimension validation
-- Synthetic data fitting
-- All registered objective functions
-- All registered error metrics
+A convenience script to run all test suites at once. This script imports and executes all individual test modules.
+
+### tests/
+
+Contains test suites for validating the implementation:
+
+#### test_logic.py
+- Tests registry and basic logic without GPU dependencies
+- Validates objective and error registry functionality
+- Tests dimension validation
+- Tests all registered objectives and errors
+
+#### test_validation.py
+- Tests parameter bounds and objective/error name validation
+- Validates dimension checking with correct and incorrect parameter counts
+- Tests objective and error name validation
+
+#### test_autobounds.py
+- Demonstrates automatic parameter bounds setting
+- Shows how bounds are automatically set based on objective function dimension
+
+#### test_objectives.py
+- Comprehensive test suite for the full implementation
+- Tests registry functionality
+- Tests synthetic data fitting with known parameters
+- Tests all registered objective functions
+- Tests all registered error metrics
+- Tests error handling with invalid configurations
 
 ## Performance Considerations
 
@@ -178,10 +206,22 @@ The implementation includes several numerical stability improvements:
 
 ## Testing
 
-Run the test suite to validate the implementation:
+To run the tests, first activate your virtual environment:
 
 ```bash
-python test_objectives.py
+source pso_venv/bin/activate  # On Windows: pso_venv\Scripts\activate
+```
+
+Then run all test suites at once using the test runner:
+
+```bash
+python run_tests.py
+```
+
+Or run individual test suites:
+
+```bash
+python -m tests.test_objectives
 ```
 
 The test suite verifies:

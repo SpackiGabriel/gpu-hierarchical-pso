@@ -65,22 +65,26 @@ All notable changes to the GPU-Based Hierarchical PSO project will be documented
 #### utils.py
 - No changes required
 
-#### test_logic.py
+#### tests/
+- Organized all test files into a dedicated tests/ directory
+- Created __init__.py to make tests a Python package
+
+##### test_logic.py
 - Created test file for validating registry and basic logic without GPU dependencies
 - Added tests for objective and error registry functionality
 - Added tests for dimension validation
 - Added tests for all registered objectives and errors
 
-#### test_validation.py
+##### test_validation.py
 - Created test file for validating parameter bounds and objective/error name validation
 - Added tests for dimension validation with correct and incorrect parameter counts
 - Added tests for objective and error name validation
 
-#### test_autobounds.py
+##### test_autobounds.py
 - Created test file for demonstrating automatic parameter bounds setting
 - Added demonstration of how bounds are automatically set based on objective function dimension
 
-#### test_objectives.py
+##### test_objectives.py
 - Created comprehensive test suite for validating the full implementation
 - Added tests for registry functionality
 - Added tests for synthetic data fitting with known parameters
