@@ -23,7 +23,7 @@ def default_bounds_for(objective: str, dim: int):
         "sphere":     (-10E-10, 10E10),
         "rosenbrock": (-10E-10, 10E10),
         "quartic":    (-10E-10, 10E10),
-        # Schwefel: não informado no artigo; use padrão clássico apenas se aceitar referência externa
+        # Schwefel: não informado no artigo; use padrão classico apenas se aceitar referência externa
         "schwefel":   (-10E-10, 10E10),
         "rastrigin":  (-10E-10, 10E10),
         "ackley":     (-10E-10, 10E10),

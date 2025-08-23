@@ -95,7 +95,7 @@ void update_velocity_position(
                         double xj = position[particle_idx * dim + j];
                         fit += (j+1) * xj*xj*xj*xj;
                     }
-                    // opcional: ruido pequeno para emular artigo (se necessário)
+                    // opcional: ruido pequeno para emular artigo (se necessario)
                     break;
                 }
                 case 103: {
