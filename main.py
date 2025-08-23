@@ -16,8 +16,8 @@ if __name__ == "__main__":
         error="sse",
         divisions=8,
         w=0.8,
-        c1=2.8,
-        c2=1.3
+        c1=1.8,
+        c2=2.3
     )
 
     end_time = time.time()
