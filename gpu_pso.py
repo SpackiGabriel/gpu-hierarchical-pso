@@ -41,6 +41,7 @@ class GPU_PSO:
         error: str = "sse",
         threads_per_block: int = 256,
         initial_positions=None,
+        threshold_fitness: float = 1e-5,
     ) -> None:
         """
         Initialize the GPU_PSO instance.
@@ -84,6 +85,10 @@ class GPU_PSO:
             q_mean = cp.mean(self.q)
             self.sst = cp.sum((self.q - q_mean) ** 2)
 
+        # Early stopping parameters
+        self.threshold_fitness = threshold_fitness
+        self.is_maximize = 1 if self.error == "r2" else 0
+
         self.initialize_particles(initial_positions)
 
     def initialize_particles(self, initial_positions=None) -> None:
@@ -121,7 +126,7 @@ class GPU_PSO:
         else:
             self.global_best_fitness = cp.inf
 
-    def run_iteration(self, w: float, c1: float, c2: float) -> None:
+    def run_iteration(self, w: float, c1: float, c2: float, stop_flag_dev, gbest_fit_dev) -> None:
         """
         Run one iteration of the PSO algorithm, updating particle positions, velocities,
         and fitness values.
@@ -130,6 +135,8 @@ class GPU_PSO:
             w (float): Inertia weight.
             c1 (float): Cognitive acceleration coefficient.
             c2 (float): Social acceleration coefficient.
+            stop_flag_dev: Device scalar for early stopping flag.
+            gbest_fit_dev: Device scalar for global best fitness.
         """
         r1 = cp.random.rand(self.n_particles, self.dim).astype(cp.float64)
         r2 = cp.random.rand(self.n_particles, self.dim).astype(cp.float64)
@@ -156,6 +163,10 @@ class GPU_PSO:
                 self.model_id,
                 self.error_id,
                 self.sst,
+                self.threshold_fitness,
+                self.is_maximize,
+                stop_flag_dev,
+                gbest_fit_dev,
             )
         )
 
@@ -185,8 +196,47 @@ class GPU_PSO:
             c2 (float): Social acceleration coefficient.
 
         Returns:
-            tuple: A tuple containing the best position as a NumPy array and the best fitness value.
+            tuple: A tuple containing (best_position, best_fitness, iterations_executed, early_stop_reason).
         """
-        for _ in range(n_iterations):
-            self.run_iteration(w, c1, c2)
-        return cp.asnumpy(self.global_best), self.global_best_fitness
+        # Allocate device scalars for early stopping
+        stop_flag_dev = cp.zeros((), dtype=cp.int32)
+        if self.is_maximize:
+            init_val = -cp.inf
+        else:
+            init_val = cp.inf
+        gbest_fit_dev = cp.full((), init_val, dtype=cp.float64)
+        
+        iterations_executed = 0
+        early_stop_reason = "max_iter"
+        
+        for iteration in range(n_iterations):
+            self.run_iteration(w, c1, c2, stop_flag_dev, gbest_fit_dev)
+            iterations_executed = iteration + 1
+            
+            # Check stop flag (minimal host-device transfer)
+            flag = int(stop_flag_dev.get())
+            if flag == 1:
+                early_stop_reason = "fitness"
+                break
+                
+            # Update host-side global best tracking
+            self.update_global_best_from_device()
+        
+        return cp.asnumpy(self.global_best), self.global_best_fitness, iterations_executed, early_stop_reason
+    
+    def update_global_best_from_device(self):
+        """
+        Update host-side global best tracking from personal best values.
+        """
+        if self.error == "r2":
+            # For R2, higher values are better
+            best_idx = cp.argmax(self.personal_best_fitness)
+            if self.personal_best_fitness[best_idx] > self.global_best_fitness:
+                self.global_best_fitness = self.personal_best_fitness[best_idx]
+                self.global_best = self.personal_best[best_idx]
+        else:
+            # For other metrics, lower values are better
+            best_idx = cp.argmin(self.personal_best_fitness)
+            if self.personal_best_fitness[best_idx] < self.global_best_fitness:
+                self.global_best_fitness = self.personal_best_fitness[best_idx]
+                self.global_best = self.personal_best[best_idx]

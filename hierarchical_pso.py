@@ -17,6 +17,7 @@ def hierarchical_pso(
     c2: float = 1.8,
     objective: str = "langmuir",
     error: str = "sse",
+    threshold_fitness: float = 1e-5,
 ):
     """
     Execute the hierarchical PSO algorithm.
@@ -40,7 +41,7 @@ def hierarchical_pso(
         error (str): Name of the error metric. Defaults to "sse".
 
     Returns:
-        tuple: Best global position (as a NumPy array) and the corresponding fitness value.
+        tuple: (best_position, best_fitness, total_iterations, early_stop_reason)
     """
     # Validate objective and error
     if objective not in objective_registry.list_objectives():
@@ -64,15 +65,27 @@ def hierarchical_pso(
     subinterval_combinations = list(product(*divided_intervals))
 
     best_particles = []
+    total_iterations = 0
+    combined_early_stop_reason = "max_iter"
 
     for subinterval in subinterval_combinations:
-        pso_instance = GPU_PSO(p, q, part_n, len(param_bounds), subinterval, pso_kernel, objective, error)
-        best_pos, best_fit = pso_instance.optimize(iter_n, w, c1, c2)
+        pso_instance = GPU_PSO(p, q, part_n, len(param_bounds), subinterval, pso_kernel, objective, error, threshold_fitness=threshold_fitness)
+        best_pos, best_fit, sub_iterations, sub_early_stop = pso_instance.optimize(iter_n, w, c1, c2)
         best_particles.append((best_pos, best_fit))
+        total_iterations += sub_iterations
+        
+        # Track if any subinterval stopped early due to fitness
+        if sub_early_stop == "fitness":
+            combined_early_stop_reason = "fitness"
 
     global_positions = [pos for pos, _ in best_particles]
-    global_pso = GPU_PSO(p, q, len(global_positions), len(param_bounds), param_bounds, pso_kernel, objective, error, initial_positions=global_positions)
-    global_best, global_best_fitness = global_pso.optimize(iter_n, w, c1, c2)
+    global_pso = GPU_PSO(p, q, len(global_positions), len(param_bounds), param_bounds, pso_kernel, objective, error, 
+                        initial_positions=global_positions, threshold_fitness=threshold_fitness)
+    global_best, global_best_fitness, global_iterations, global_early_stop = global_pso.optimize(iter_n, w, c1, c2)
+    total_iterations += global_iterations
+    
+    # Final early stop reason is global phase result
+    final_early_stop_reason = global_early_stop
 
     print(f"Final global best particle: {global_best}, Fitness: {global_best_fitness}")
-    return global_best, global_best_fitness
+    return global_best, global_best_fitness, total_iterations, final_early_stop_reason

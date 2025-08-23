@@ -29,6 +29,35 @@ ERROR_R2 = 5
 
 # Kernel code with support for multiple objective functions and error metrics
 kernel_code = """
+// Atomic operations for double precision
+__device__ double atomicMinDouble(double* address, double val) {
+    unsigned long long* address_as_ull = (unsigned long long*)address;
+    unsigned long long old = *address_as_ull;
+    unsigned long long assumed;
+    
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                       __double_as_longlong(fmin(val, __longlong_as_double(assumed))));
+    } while (assumed != old);
+    
+    return __longlong_as_double(old);
+}
+
+__device__ double atomicMaxDouble(double* address, double val) {
+    unsigned long long* address_as_ull = (unsigned long long*)address;
+    unsigned long long old = *address_as_ull;
+    unsigned long long assumed;
+    
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                       __double_as_longlong(fmax(val, __longlong_as_double(assumed))));
+    } while (assumed != old);
+    
+    return __longlong_as_double(old);
+}
+
 extern "C" __global__
 void update_velocity_position(
     double *position,
@@ -49,7 +78,11 @@ void update_velocity_position(
     double *q,
     int model_id,
     int error_id,
-    double sst
+    double sst,
+    double threshold_fitness,
+    int is_maximize,
+    int* stop_flag,
+    double* gbest_fitness
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n_particles * dim) {
@@ -462,10 +495,46 @@ void update_velocity_position(
             }
 
             fitness[particle_idx] = fit;
-            if (fit < personal_best_fitness[particle_idx]) {
+            
+            // Update personal best based on error metric
+            bool is_better = false;
+            if (error_id == 5) { // R2 - higher is better
+                if (fit > personal_best_fitness[particle_idx]) {
+                    is_better = true;
+                }
+            } else { // Other metrics - lower is better
+                if (fit < personal_best_fitness[particle_idx]) {
+                    is_better = true;
+                }
+            }
+            
+            if (is_better) {
                 personal_best_fitness[particle_idx] = fit;
                 for (int d = 0; d < dim; ++d) {
                     personal_best[particle_idx * dim + d] = position[particle_idx * dim + d];
+                }
+                
+                // Update global best using atomic operations
+                if (error_id == 5) { // R2 - maximize
+                    atomicMaxDouble(gbest_fitness, fit);
+                } else { // Other metrics - minimize
+                    atomicMinDouble(gbest_fitness, fit);
+                }
+            }
+            
+            // Check for early stopping (only one thread per grid)
+            if (blockIdx.x == 0 && threadIdx.x == 0) {
+                double current_best = *gbest_fitness;
+                if (is_maximize == 1) {
+                    // For maximizing metrics (R2)
+                    if (current_best >= threshold_fitness) {
+                        *stop_flag = 1;
+                    }
+                } else {
+                    // For minimizing metrics (SSE, MSE, etc.)
+                    if (current_best <= threshold_fitness) {
+                        *stop_flag = 1;
+                    }
                 }
             }
         }
