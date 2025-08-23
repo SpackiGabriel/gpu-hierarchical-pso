@@ -17,3 +17,16 @@ def divide_intervals(param_bounds: List[Tuple[float, float]], divisions: int) ->
         intervals = [(lower + i * step, lower + (i + 1) * step) for i in range(divisions)]
         divided_intervals.append(intervals)
     return divided_intervals
+
+def default_bounds_for(objective: str, dim: int):
+    m = {
+        "sphere":     (-10E-10, 10E10),
+        "rosenbrock": (-30.0, 30.0),
+        "quartic":    (-1.28, 1.28),
+        # Schwefel: não informado no artigo; use padrão clássico apenas se aceitar referência externa
+        "schwefel":   (-500.0, 500.0),
+        "rastrigin":  (-5.12, 5.12),
+        "ackley":     (-32.0, 32.0),
+    }
+    lo, hi = m.get(objective, (-1.0, 1.0))
+    return [(lo, hi) for _ in range(dim)]

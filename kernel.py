@@ -4,7 +4,6 @@ Supports multiple objective functions and error metrics via switch-based selecti
 """
 
 import cupy as cp
-from registries import objective_registry, error_registry
 
 # Define constants for model and error IDs
 MODEL_LANGMUIR = 0
@@ -13,6 +12,13 @@ MODEL_TOTH = 2
 MODEL_BET = 3
 MODEL_GAB = 4
 MODEL_NEWTON = 5
+MODEL_SPHERE = 100
+MODEL_ROSENBROCK = 101
+MODEL_QUARTIC = 102
+MODEL_SCHWEFEL = 103
+MODEL_RASTRIGIN = 104
+MODEL_ACKLEY = 105
+
 
 ERROR_SSE = 0
 ERROR_MSE = 1
@@ -25,21 +31,21 @@ ERROR_R2 = 5
 kernel_code = """
 extern "C" __global__
 void update_velocity_position(
-    double *position, 
-    double *velocity, 
-    double *personal_best, 
-    double *global_best, 
-    double *fitness, 
-    double *personal_best_fitness, 
-    double *r1, 
-    double *r2, 
-    double w, 
-    double c1, 
-    double c2, 
-    int n_particles, 
-    int dim, 
-    int n_points, 
-    double *p, 
+    double *position,
+    double *velocity,
+    double *personal_best,
+    double *global_best,
+    double *fitness,
+    double *personal_best_fitness,
+    double *r1,
+    double *r2,
+    double w,
+    double c1,
+    double c2,
+    int n_particles,
+    int dim,
+    int n_points,
+    double *p,
     double *q,
     int model_id,
     int error_id,
@@ -50,18 +56,81 @@ void update_velocity_position(
         int particle_idx = idx / dim;
         int dim_idx = idx % dim;
         int pos = particle_idx * dim + dim_idx;
-        
+
 
         velocity[pos] = w * velocity[pos] + c1 * r1[pos] * (personal_best[pos] - position[pos]) + c2 * r2[pos] * (global_best[dim_idx] - position[pos]);
         position[pos] += velocity[pos];
-        
+
 
         if (dim_idx == 0) {
             double fit = 0.0;
             double q_calc;
-            
+
 
             switch (model_id) {
+              case 100: {
+    // f(x) = sum(x_j^2)
+    fit = 0.0;
+    for (int j=0; j<dim; ++j) {
+        double xj = position[particle_idx * dim + j];
+        fit += xj * xj;
+    }
+    break;
+}
+                case 101: {
+                    fit = 0.0;
+                    for (int j=0; j<dim-1; ++j) {
+                        double xj = position[particle_idx * dim + j];
+                        double xk = position[particle_idx * dim + j + 1];
+                        double t1 = (1.0 - xj);
+                        double t2 = (xk - xj*xj);
+                        fit += 100.0 * t2*t2 + t1*t1;
+                    }
+                    break;
+                }
+                case 102: {
+                    // f(x) = sum( j * x_j^4 ) + noise(0,1)
+                    fit = 0.0;
+                    for (int j=0; j<dim; ++j) {
+                        double xj = position[particle_idx * dim + j];
+                        fit += (j+1) * xj*xj*xj*xj;
+                    }
+                    // opcional: ruído pequeno para emular artigo (se necessário)
+                    break;
+                }
+                case 103: {
+                    // f(x) = 418.9829*dim - sum( x_j * sin(sqrt(|x_j|)) )
+                    fit = 418.9829 * dim;
+                    for (int j=0; j<dim; ++j) {
+                        double xj = position[particle_idx * dim + j];
+                        fit -= xj * sin(sqrt(fabs(xj)));
+                    }
+                    break;
+                }
+                case 104: {
+                    // f(x) = 10*dim + sum( x_j^2 - 10*cos(2*pi*x_j) )
+                    fit = 10.0 * dim;
+                    for (int j=0; j<dim; ++j) {
+                        double xj = position[particle_idx * dim + j];
+                        fit += xj*xj - 10.0 * cos(6.2831853071795864769 * xj);
+                    }
+                    break;
+                }
+                case 105: {
+                    // f(x) = -20 exp(-0.2 sqrt( (1/dim) sum x_j^2 ))
+                    //        - exp( (1/dim) sum cos(2*pi*x_j) ) + 20 + e
+                    double s1 = 0.0, s2 = 0.0;
+                    for (int j=0; j<dim; ++j) {
+                        double xj = position[particle_idx * dim + j];
+                        s1 += xj*xj;
+                        s2 += cos(6.2831853071795864769 * xj);  // 2 * pi
+                    }
+                    s1 /= (double)dim;
+                    s2 /= (double)dim;
+                    fit = fit = -20.0 * exp(-0.2 * sqrt(s1)) - exp(s2) + 20.0 + 2.71828182845904523536;
+                    break;
+                }
+
                 case 0: {
                     if (dim < 2) {
                         fit = 1e10;
@@ -69,13 +138,13 @@ void update_velocity_position(
                     }
                     double qmax = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
-                    
+
 
                     if (qmax <= 0 || b <= 0) {
                         fit = 1e10;
                         break;
                     }
-                    
+
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
                         if (bp > 700) {
@@ -83,7 +152,7 @@ void update_velocity_position(
                         } else {
                             q_calc = (qmax * bp) / (1.0 + bp);
                         }
-                        
+
 
                         switch (error_id) {
                             case 0:
@@ -120,13 +189,13 @@ void update_velocity_position(
                     double qmax = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
                     double n = position[particle_idx * dim + 2];
-                    
+
 
                     if (qmax <= 0 || b <= 0 || n <= 0) {
                         fit = 1e10;
                         break;
                     }
-                    
+
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
                         if (bp > 700 || n > 100) {
@@ -135,7 +204,7 @@ void update_velocity_position(
                             double bp_n = pow(bp, n);
                             q_calc = (qmax * bp_n) / (1.0 + bp_n);
                         }
-                        
+
 
                         switch (error_id) {
                             case 0:
@@ -172,13 +241,13 @@ void update_velocity_position(
                     double qmax = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
                     double t = position[particle_idx * dim + 2];
-                    
+
 
                     if (qmax <= 0 || b <= 0 || t <= 0) {
                         fit = 1e10;
                         break;
                     }
-                    
+
                     for (int i = 0; i < n_points; ++i) {
                         double bp = b * p[i];
                         if (bp > 700 || t > 100) {
@@ -191,7 +260,7 @@ void update_velocity_position(
                             if (denom_t < 1e-10) denom_t = 1e-10;
                             q_calc = (qmax * bp) / denom_t;
                         }
-                        
+
 
                         switch (error_id) {
                             case 0:
@@ -228,13 +297,13 @@ void update_velocity_position(
                     double qm = position[particle_idx * dim];
                     double c = position[particle_idx * dim + 1];
                     double k = position[particle_idx * dim + 2];
-                    
+
 
                     if (qm <= 0 || c <= 0 || k <= 0) {
                         fit = 1e10;
                         break;
                     }
-                    
+
                     for (int i = 0; i < n_points; ++i) {
                         double p_val = p[i];
                         if (p_val >= 1.0/k) {
@@ -246,7 +315,7 @@ void update_velocity_position(
                             if (fabs(denom2) < 1e-10) denom2 = 1e-10;
                             q_calc = (qm * c * k * p_val) / (denom1 * denom2);
                         }
-                        
+
 
                         switch (error_id) {
                             case 0:
@@ -283,13 +352,13 @@ void update_velocity_position(
                     double qm = position[particle_idx * dim];
                     double c = position[particle_idx * dim + 1];
                     double k = position[particle_idx * dim + 2];
-                    
+
 
                     if (qm <= 0 || c <= 0 || k <= 0) {
                         fit = 1e10;
                         break;
                     }
-                    
+
                     for (int i = 0; i < n_points; ++i) {
                         double p_val = p[i];
                         if (p_val >= 1.0/k) {
@@ -301,7 +370,7 @@ void update_velocity_position(
                             if (fabs(denom2) < 1e-10) denom2 = 1e-10;
                             q_calc = (qm * c * k * p_val) / (denom1 * denom2);
                         }
-                        
+
 
                         switch (error_id) {
                             case 0:
@@ -337,10 +406,10 @@ void update_velocity_position(
                     }
                     double a = position[particle_idx * dim];
                     double b = position[particle_idx * dim + 1];
-                    
+
                     for (int i = 0; i < n_points; ++i) {
                         q_calc = a + b * p[i];
-                        
+
 
                         switch (error_id) {
                             case 0:
@@ -373,7 +442,7 @@ void update_velocity_position(
                     fit = 1e10;
                     break;
             }
-            
+
 
             switch (error_id) {
                 case 1:
@@ -391,7 +460,7 @@ void update_velocity_position(
                     }
                     break;
             }
-            
+
             fitness[particle_idx] = fit;
             if (fit < personal_best_fitness[particle_idx]) {
                 personal_best_fitness[particle_idx] = fit;
@@ -410,21 +479,21 @@ pso_kernel = cp.RawKernel(kernel_code, 'update_velocity_position')
 kernel_template = """
 extern "C" __global__
 void update_velocity_position(
-    double *position, 
-    double *velocity, 
-    double *personal_best, 
-    double *global_best, 
-    double *fitness, 
-    double *personal_best_fitness, 
-    double *r1, 
-    double *r2, 
-    double w, 
-    double c1, 
-    double c2, 
-    int n_particles, 
-    int dim, 
-    int n_points, 
-    double *p, 
+    double *position,
+    double *velocity,
+    double *personal_best,
+    double *global_best,
+    double *fitness,
+    double *personal_best_fitness,
+    double *r1,
+    double *r2,
+    double w,
+    double c1,
+    double c2,
+    int n_particles,
+    int dim,
+    int n_points,
+    double *p,
     double *q,
     double sst
 ) {
@@ -433,20 +502,20 @@ void update_velocity_position(
         int particle_idx = idx / dim;
         int dim_idx = idx % dim;
         int pos = particle_idx * dim + dim_idx;
-        
+
 
         velocity[pos] = w * velocity[pos] + c1 * r1[pos] * (personal_best[pos] - position[pos]) + c2 * r2[pos] * (global_best[dim_idx] - position[pos]);
         position[pos] += velocity[pos];
-        
+
 
         if (dim_idx == 0) {
             double fit = 0.0;
             double q_calc;
-            
+
             // MODEL_FUNCTION_PLACEHOLDER
-            
+
             // ERROR_FUNCTION_PLACEHOLDER
-            
+
             fitness[particle_idx] = fit;
             if (fit < personal_best_fitness[particle_idx]) {
                 personal_best_fitness[particle_idx] = fit;
@@ -461,10 +530,10 @@ void update_velocity_position(
 
 def get_model_function(model_name: str) -> str:
     """Get the CUDA code for a specific model.
-    
+
     Args:
         model_name: Name of the model
-        
+
     Returns:
         CUDA code for the model
     """
@@ -475,7 +544,7 @@ def get_model_function(model_name: str) -> str:
             } else {
                 double qmax = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
-                
+
 
                 if (qmax <= 0 || b <= 0) {
                     fit = 1e10;
@@ -499,7 +568,7 @@ def get_model_function(model_name: str) -> str:
                 double qmax = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
                 double n = position[particle_idx * dim + 2];
-                
+
 
                 if (qmax <= 0 || b <= 0 || n <= 0) {
                     fit = 1e10;
@@ -524,7 +593,7 @@ def get_model_function(model_name: str) -> str:
                 double qmax = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
                 double t = position[particle_idx * dim + 2];
-                
+
 
                 if (qmax <= 0 || b <= 0 || t <= 0) {
                     fit = 1e10;
@@ -553,7 +622,7 @@ def get_model_function(model_name: str) -> str:
                 double qm = position[particle_idx * dim];
                 double c = position[particle_idx * dim + 1];
                 double k = position[particle_idx * dim + 2];
-                
+
 
                 if (qm <= 0 || c <= 0 || k <= 0) {
                     fit = 1e10;
@@ -581,7 +650,7 @@ def get_model_function(model_name: str) -> str:
                 double qm = position[particle_idx * dim];
                 double c = position[particle_idx * dim + 1];
                 double k = position[particle_idx * dim + 2];
-                
+
 
                 if (qm <= 0 || c <= 0 || k <= 0) {
                     fit = 1e10;
@@ -608,7 +677,7 @@ def get_model_function(model_name: str) -> str:
             } else {
                 double a = position[particle_idx * dim];
                 double b = position[particle_idx * dim + 1];
-                
+
                 for (int i = 0; i < n_points; ++i) {
                     q_calc = a + b * p[i];
                     // ERROR_ACCUMULATION_PLACEHOLDER
@@ -616,17 +685,17 @@ def get_model_function(model_name: str) -> str:
             }
         """
     }
-    
+
     return model_functions.get(model_name, """
         fit = 1e10;
     """)
 
 def get_error_function(error_name: str) -> str:
     """Get the CUDA code for a specific error function.
-    
+
     Args:
         error_name: Name of the error function
-        
+
     Returns:
         CUDA code for the error function
     """
@@ -641,7 +710,7 @@ def get_error_function(error_name: str) -> str:
             fit += (q[i] - q_calc) * (q[i] - q_calc);
         """,
         "mae": """
-            fit += fabs(q[i] - q_calc);
+            fit += fabs(q[i] - q_calc) * sizeof(q[i]) / sizeof(q);
         """,
         "mape": """
             if (fabs(q[i]) > 1e-10) {
@@ -654,17 +723,17 @@ def get_error_function(error_name: str) -> str:
             fit += (q[i] - q_calc) * (q[i] - q_calc);
         """
     }
-    
+
     return error_functions.get(error_name, """
         fit += (q[i] - q_calc) * (q[i] - q_calc);
     """)
 
 def get_error_finalization(error_name: str) -> str:
     """Get the CUDA code for finalizing the error calculation.
-    
+
     Args:
         error_name: Name of the error function
-        
+
     Returns:
         CUDA code for finalizing the error calculation
     """
@@ -684,40 +753,39 @@ def get_error_finalization(error_name: str) -> str:
             }
         """
     }
-    
+
     return error_finalizations.get(error_name, "")
 
 def generate_specialized_kernel(model_name: str, error_name: str) -> cp.RawKernel:
     """Generate a specialized kernel for a specific model and error function.
-    
+
     Args:
         model_name: Name of the model
         error_name: Name of the error function
-        
+
     Returns:
         Compiled RawKernel
     """
     # Get the model function
     model_function = get_model_function(model_name)
-    
+
     # Get the error accumulation code
     error_accumulation = get_error_function(error_name)
-    
+
     # Replace the placeholder in the model function
     model_function = model_function.replace("// ERROR_ACCUMULATION_PLACEHOLDER", error_accumulation)
-    
+
     # Replace the model function placeholder in the template
     kernel_source = kernel_template.replace("// MODEL_FUNCTION_PLACEHOLDER", model_function)
-    
+
     # Get the error finalization code
     error_finalization = get_error_finalization(error_name)
-    
+
     # Create the complete error function
     error_function = error_accumulation + error_finalization
-    
+
     # Replace the error function placeholder in the template
     kernel_source = kernel_source.replace("// ERROR_FUNCTION_PLACEHOLDER", error_function)
-    
+
     # Compile and return the kernel
     return cp.RawKernel(kernel_source, 'update_velocity_position')
-

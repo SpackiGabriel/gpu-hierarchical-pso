@@ -45,21 +45,21 @@ def hierarchical_pso(
     # Validate objective and error
     if objective not in objective_registry.list_objectives():
         raise ValueError(f"Objective '{objective}' not registered")
-    
+
     if error not in error_registry.list_errors():
         raise ValueError(f"Error metric '{error}' not registered")
-    
+
     # Get required dimension for the objective
     required_dim = objective_registry.get_dimension(objective)
-    
+
     if param_bounds is None:
         # Set default bounds based on the required dimension
         param_bounds = [[0, 1000000] for _ in range(required_dim)]
-    
+
     # Validate dimension
     if len(param_bounds) != required_dim:
         raise ValueError(f"Objective '{objective}' requires {required_dim} parameters, but got {len(param_bounds)} bounds")
-    
+
     divided_intervals = divide_intervals(param_bounds, divisions)
     subinterval_combinations = list(product(*divided_intervals))
 

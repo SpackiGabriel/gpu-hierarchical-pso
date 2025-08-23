@@ -1,5 +1,4 @@
 import cupy as cp
-from typing import Optional
 from registries import objective_registry, error_registry
 
 
@@ -61,7 +60,7 @@ class GPU_PSO:
         self.p = cp.asarray(p, dtype=cp.float64)
         self.q = cp.asarray(q, dtype=cp.float64)
         self.n_particles: int = n_particles
-        
+
         # Validate and set objective function
         self.objective = objective
         self.model_id = objective_registry.get_model_id(objective)
@@ -69,16 +68,16 @@ class GPU_PSO:
         if dim != required_dim:
             raise ValueError(f"Objective '{objective}' requires dimension {required_dim}, but got {dim}")
         self.dim: int = dim
-        
+
         # Validate and set error metric
         self.error = error
         self.error_id = error_registry.get_error_id(error)
-        
+
         self.param_bounds = param_bounds
         self.kernel = kernel
         self.threads_per_block: int = threads_per_block
         self.blocks_per_grid: int = (n_particles * dim + threads_per_block - 1) // threads_per_block
-        
+
         # Calculate SST for R2 calculation if needed
         self.sst = 0.0
         if self.error == "r2":
@@ -106,7 +105,7 @@ class GPU_PSO:
             self.position = cp.asarray(initial_positions, dtype=cp.float64)
         self.velocity = cp.zeros_like(self.position)
         self.personal_best = self.position.copy()
-        
+
         # Initialize fitness values based on error metric
         if self.error == "r2":
             # R2 values are typically between -∞ and 1, with 1 being perfect
@@ -116,7 +115,7 @@ class GPU_PSO:
             # Other error metrics are minimized (0 is perfect)
             self.fitness = cp.full(self.n_particles, cp.inf, dtype=cp.float64)
             self.personal_best_fitness = cp.full(self.n_particles, cp.inf, dtype=cp.float64)
-        
+
         self.global_best = cp.zeros(self.dim, dtype=cp.float64)
         if self.error == "r2":
             self.global_best_fitness = -cp.inf
@@ -160,7 +159,7 @@ class GPU_PSO:
                 self.sst,
             )
         )
-        
+
         # Update global best based on error metric
         if self.error == "r2":
             # For R2, higher values are better
