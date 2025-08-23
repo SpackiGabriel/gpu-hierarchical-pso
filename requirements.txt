@@ -1,0 +1,7 @@
+cupy-cuda12x==13.6.0
+fastrlock==0.8.3
+numpy==2.3.2
+nvidia-cuda-nvrtc-cu12==12.4.127
+nvidia-cuda-runtime-cu12==12.4.127
+nvidia-curand-cu12==10.3.10.19
+nvidia-pyindex==1.0.9
