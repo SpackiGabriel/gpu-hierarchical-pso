@@ -108,7 +108,6 @@ class GPU_PSO:
 
         # Initialize fitness values based on error metric
         if self.error == "r2":
-            # R2 values are typically between -∞ and 1, with 1 being perfect
             self.fitness = cp.full(self.n_particles, -cp.inf, dtype=cp.float64)
             self.personal_best_fitness = cp.full(self.n_particles, -cp.inf, dtype=cp.float64)
         else:
