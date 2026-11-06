@@ -1,6 +1,6 @@
 # GPU-Based Hierarchical PSO
 
-This project implements a hierarchical Particle Swarm Optimization (PSO) algorithm that leverages GPU acceleration using CuPy and custom CUDA kernels. The algorithm divides the parameter space into subintervals, performs localized PSO searches in each subinterval, and then combines the best solutions from each region to execute a final global search.
+This repository is part of ongoing research on fitting adsorption isotherm models to experimental data. It implements a hierarchical Particle Swarm Optimization (PSO) algorithm that leverages GPU acceleration using CuPy and custom CUDA kernels. The algorithm divides the parameter space into subintervals, performs localized PSO searches in each subinterval, and then combines the best solutions from each region to execute a final global search.
 
 The implementation now supports multiple objective functions (isotherm models) and error metrics, allowing flexible model selection for fitting experimental data.
 
@@ -9,11 +9,11 @@ The implementation now supports multiple objective functions (isotherm models) a
 ```bash
 gpu-hierarchical-pso/ 
 ├── kernel.py          # Contains the CUDA kernel code and compiles the kernel using CuPy
-├── pso_gpu.py         # Implements the GPU_PSO class that encapsulates the GPU-based PSO algorithm
+├── gpu_pso.py         # Implements the GPU_PSO class that encapsulates the GPU-based PSO algorithm
 ├── hierarchical_pso.py # Orchestrates the hierarchical PSO execution over divided parameter spaces
 ├── utils.py           # Provides helper functions, such as dividing intervals into subintervals
 ├── registries.py      # Defines registries for objective functions and error metrics
-├── setup_env.sh       # Script to set up the virtual environment and install dependencies
+├── requirements.txt   # Pinned dependencies (CuPy for CUDA 12.x)
 ├── main.py            # Main entry point to run the hierarchical PSO optimizer
 ├── run_tests.py       # Script to run all test suites
 └── tests/             # Directory containing test suites for validating the implementation
@@ -25,7 +25,7 @@ gpu-hierarchical-pso/
 
 ## Prerequisites
 
-- **Python 3.7+**
+- **Python 3.11+** (NumPy 2.3 requires 3.11 or newer)
 - **CUDA Toolkit** (compatible with your GPU)
 - **CuPy** – a NumPy-like API accelerated with CUDA.
 
@@ -33,16 +33,15 @@ gpu-hierarchical-pso/
 
 First, ensure that you have CUDA installed on your system.
 
-Install the necessary Python package using pip:
+Install the pinned dependencies (CuPy built for CUDA 12.x):
 
 ```bash
-pip install cupy
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-If you prefer conda, you can install CuPy via:
-```bash
-conda install -c conda-forge cupy
-```
+For other CUDA versions, install the matching CuPy package instead (see the [CuPy installation guide](https://docs.cupy.dev/en/stable/install.html)).
 
 ## Usage
 
@@ -117,7 +116,7 @@ Contains the CUDA kernel code for the PSO algorithm and compiles the kernel usin
 - Template-based kernel generation for branch-free specialized kernels (Strategy B)
 - Numerical stability improvements and parameter validation
 
-### pso_gpu.py
+### gpu_pso.py
 
 Implements the `GPU_PSO` class which:
 - Initializes particle positions and velocities within user-specified bounds.
@@ -206,13 +205,7 @@ The implementation includes several numerical stability improvements:
 
 ## Testing
 
-To run the tests, first activate your virtual environment:
-
-```bash
-source pso_venv/bin/activate  # On Windows: pso_venv\Scripts\activate
-```
-
-Then run all test suites at once using the test runner:
+With the virtual environment active, run all test suites at once using the test runner:
 
 ```bash
 python run_tests.py
